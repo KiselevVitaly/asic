@@ -1,6 +1,10 @@
 import asinc_chat.services as s
 
+import logging
+from asinc_chat.log import client_log_config
+
 DESC = 'Client'
+LOG = logging.getLogger('client')
 
 
 class Client:
