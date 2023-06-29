@@ -1,66 +1,102 @@
-import asinc_chat.services as s
+"""Программа-сервер"""
 
+import socket
+import sys
+import json
+from common_files.settings import ACTION, ACCOUNT_NAME, RESPONSE, \
+    MAX_CONNECTIONS, PRESENCE, TIME, USER, ERROR, DEFAULT_PORT, \
+    DEFAULT_IP_ADDRESS
+from common_files.plugins import get_msg, send_msg
 import logging
-from asinc_chat.log import server_log_config
+import log.server_log_config
 
-DESC = 'Server'
-LOG = logging.getLogger('server')
+SERVER_LOGGER = logging.getLogger('server_log')
 
 
-class Server:
+def process_client_msg(msg):
     """
-    Сервер, работает по протоколу TCP
+    Обработка сообщений от клиента. На вход получаем сообщение от клиента -
+    словарь. Проверяем его корректность и возвращаем ответ клиенту - словарь.
+
+    :param msg:
+    :return:
     """
-    _server_socket = s.socket.socket(s.socket.AF_INET, s.socket.SOCK_STREAM)
-    connections = []
+    if ACTION in msg and msg[ACTION] == PRESENCE and TIME in msg \
+            and USER in msg and msg[USER][ACCOUNT_NAME] == 'Guest':
+        return {RESPONSE: 200}
+    return {
+        RESPONSE: 400,
+        ERROR: 'Bad Request'
+    }
 
-    def __init__(self, host:str, port: int) -> None:
-         self._server_socket.bind((host, port))
-         self._server_socket.listen(5)
-         self._server_socket.settimeout(0.5)
-         print(f'Сервер запущен по адресу {host}:{port}')
 
-    def parse_message(self, message):
-        msg = message.decode(s.ENCODING_)
-        print(msg)
-        parsed_msg = s.MessageBuilder.get_object_of_json(msg)
-        return parsed_msg
+def main():
+    """
+    Запуск сервера. Установка аргументов из командной строки.
+    Пример: server.py -p 8079 -a 192.168.1.2
+    :return:
+    """
 
-    def send_responce(self, client, code, alert=None):
-        gen_response = s.MessageBuilder.create_response_message(code, alert)
-        gen_response_json = gen_response.encode_to_json()
-        client.send(gen_response_json.encode(s.ENCODING_))
+    # Установка порта для сетевого взаимодействия
+    try:
+        if '-p' in sys.argv:
+            listen_port = int(sys.argv[sys.argv.index('-p') + 1])
+            SERVER_LOGGER.info(f'Установлен порт {listen_port}')
+        else:
+            listen_port = DEFAULT_PORT
+            SERVER_LOGGER.info(f'Установлен DEFAULT_PORT {DEFAULT_PORT}')
+        if listen_port < 1024 or listen_port > 65535:
+            raise ValueError
+    except IndexError:
+        SERVER_LOGGER.critical(f'Параметр -\'p\' необходимо указать номер '
+                               'порта. Пример: server.py -p 8079 -a '
+                               '192.168.1.2')
+        sys.exit(1)
+    except ValueError:
+        SERVER_LOGGER.critical(f'Второй аргумент - число, адрес порта, '
+                               'должен быть в диапазоне от 1024 до 65535. '
+                               'Пример: server.py -p 8079 -a 192.168.1.2')
+        sys.exit(1)
 
-    def run(self) -> None:
-        while True:
-            try:
-                client, address = self._server_socket.accept()
-            except OSError:
-                pass
-            else:
-                print(f'Получен запрос на соединение от: {address}')
-                self.connections.append(client)
-            finally:
-                responce_ = []
-                write_ = []
-                try:
-                    responce_, write_, excepttions_ = s.select.select(self.connections, self.connections, [], 0)
-                except Exception:
-                    pass
-                for c in responce_:
-                    data = c.recv(s.BLOCK_LEN)
-                    parsed_message = self.parse_message(data)
-                    try:
-                        if parsed_message.action == 'presence' and (c in write_):
-                            self.send_responce(client=c, code=200, alert=f'{parsed_message.user.name} в настоящее время присутствует')
-                    except:
-                        self.connections.remove(c)
+    # Установка IP адреса для подключения клиента
+    try:
+        if '-a' in sys.argv:
+            listen_address = sys.argv[sys.argv.index('-a') + 1]
+            SERVER_LOGGER.info(f'Установлен IP адрес {listen_address}')
+        else:
+            listen_address = DEFAULT_IP_ADDRESS
+            SERVER_LOGGER.info(
+                f'Установлен DEFAULT_IP_ADDRESS {DEFAULT_IP_ADDRESS}')
 
-    def close(self):
-        self._server_socket.close()
+    except IndexError:
+        SERVER_LOGGER.critical(f'После параметра \'a\'- необходимо указать '
+                               f'адрес, который будет слушать сервер. '
+                               f'Пример: server.py -p 8079 -a 192.168.1.2')
+        sys.exit(1)
+
+    # Активация сокета
+
+    transport = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    transport.bind((listen_address, listen_port))
+
+    # Активация прослушивания порта
+
+    transport.listen(MAX_CONNECTIONS)
+
+    while True:
+        client, client_address = transport.accept()
+        try:
+            msg_from_client = get_msg(client)
+            SERVER_LOGGER.info(f'Сообщение: {msg_from_client}')
+            # {'action': 'presence', 'time': 1573760672.167031, 'user': {
+            # 'account_name': 'Guest'}}
+            response = process_client_msg(msg_from_client)
+            send_msg(client, response)
+            client.close()
+        except (ValueError, json.JSONDecodeError):
+            SERVER_LOGGER.error('Некорректное сообщение от клиента.')
+            client.close()
 
 
 if __name__ == '__main__':
-    args = s.parse_cli_arguments(DESC)
-    server = Server(host=args.host, port=args.port)
-    server.run()
+    main()
