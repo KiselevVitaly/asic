@@ -1,31 +1,46 @@
-import pytest
-import socket as s
+"""unittest server.py"""
 
-from asinc_chat.services.JIMProtocol import MessageBuilder
-from server import Server
-from client import Client
+import unittest
+import os
+import sys
 
-
-@pytest.fixture
-def socket():
-    _socket = s.socket(s.AF_INET, s.SOCK_STREAM)
-    _socket.bind(('localhost', 7777))
-    yield _socket
-    _socket.close()
+sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
+from ..server import process_client_msg
+from ..common_files.settings import RESPONSE, ACTION, PRESENCE, TIME, USER, \
+    ACCOUNT_NAME, ERROR
 
 
-@pytest.fixture
-def client():
-    _client = Client(host='localhost', port=7777)
-    yield _client
-    
+class TestServer(unittest.TestCase):
+    """Тест класс сервера"""
 
-@pytest.fixture
-def responce():
-    msg = MessageBuilder.create_presence_message('Guest')
-    yield msg
+    def setUp(self) -> None:
+        self.ok_request = {RESPONSE: 200}
+        self.bad_request = {RESPONSE: 400, ERROR: 'Bad Request'}
+
+    def test_process_client_msg_200(self):
+        """Обработка сообщения от клиента прошла успешно"""
+        self.assertEqual(process_client_msg(
+            {ACTION: PRESENCE, TIME: 1.1, USER: {ACCOUNT_NAME: 'Guest'}}),
+            self.ok_request)
+
+    def test_process_client_msg_unknown_user(self):
+        """Неизвестный клиент USER"""
+        self.assertEqual(process_client_msg(
+            {ACTION: PRESENCE, TIME: 1.1, USER: {ACCOUNT_NAME: 'Unknown'}}),
+            self.bad_request)
+
+    def test_process_client_msg_wrong_action(self):
+        """Неизвестное действие ACTION"""
+        self.assertEqual(process_client_msg(
+            {ACTION: 'action', TIME: 1.1, USER: {ACCOUNT_NAME: 'Guest'}}),
+            self.bad_request)
+
+    def test_process_client_msg_absence_time(self):
+        """Отсутствует TIME"""
+        self.assertEqual(process_client_msg(
+            {ACTION: PRESENCE, USER: {ACCOUNT_NAME: 'Guest'}}),
+            self.bad_request)
 
 
-def test_server_connect(socket):
-    socket.connect(('localhost', 7777))
-    assert socket
+if __name__ == '__main__':
+    unittest.main()
