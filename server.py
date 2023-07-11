@@ -1,115 +1,62 @@
-import inspect
-import json
-import socket
-import sys
-import argparse
-import logging
-import traceback
+import asinc_chat.services as s
+
+DESC = 'Server'
 
 
-import log.logs_config.server_config
-from errors import IncorrectDataRecivedError
-from common.variables import ACTION, ACCOUNT_NAME, RESPONSE, MAX_CONNECTIONS, PRESENCE, \
-    TIME, USER, ERROR, DEFAULT_PORT
-from common.utils import get_message, send_message
-from decorator import Log
-from decorator import log
-
-LOGGER = logging.getLogger('server')
-
-
-
-
-
-
-
-
-
-
-
-# @Log()
-@log
-def process_client_message(message):
+class Server:
     """
-       Обработчик сообщений от клиентов, принимает словарь - сообщение от клинта,
-       проверяет корректность, возвращает словарь-ответ для клиента
-       :param message:
-       :return:
-       """
-    LOGGER.debug(f'Разбор сообщения от клиента : {message}')
-    if ACTION in message and message[ACTION] == PRESENCE and TIME in message and \
-            USER in message and message[USER][ACCOUNT_NAME] == 'Guest':
-        return {RESPONSE: 200}
-    return {
-        RESPONSE: 400,
-        ERROR: 'Bad Request'
-
-    }
-
-# @Log()
-@log
-def create_arg_parser():
+    Сервер, работает по протоколу TCP
     """
-    Парсер аргументов коммандной строки
-    :return:
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-p', default=DEFAULT_PORT, type=int, nargs='?')
-    parser.add_argument('-a', default='', nargs='?')
-    return parser
+    _server_socket = s.socket.socket(s.socket.AF_INET, s.socket.SOCK_STREAM)
+    connections = []
 
+    def __init__(self, host:str, port: int) -> None:
+         self._server_socket.bind((host, port))
+         self._server_socket.listen(5)
+         self._server_socket.settimeout(0.5)
+         print(f'Сервер запущен по адресу {host}:{port}')
 
-def main():
-    """
-        Загрузка параметров командной строки, если нет параметров, то задаём значения по умоланию
-        :return:
-        """
-    parser = create_arg_parser()
-    namespace = parser.parse_args(sys.argv[1:])
-    listen_address = namespace.a
-    listen_port = namespace.p
+    def parse_message(self, message):
+        msg = message.decode(s.ENCODING_)
+        print(msg)
+        parsed_msg = s.MessageBuilder.get_object_of_json(msg)
+        return parsed_msg
 
-    # проверка получения корретного номера порта для работы сервера.
-    if not 1023 < listen_port < 65536:
-        LOGGER.critical(f'Попытка запуска сервера с указанием неподходящего порта '
-                            f'{listen_port}. Допустимы адреса с 1024 до 65535.')
-        sys.exit(1)
-    LOGGER.info(f'Запущен сервер, порт для подключений: {listen_port}, '
-                    f'адрес с которого принимаются подключения: {listen_address}. '
-                    f'Если адрес не указан, принимаются соединения с любых адресов.')
-    # Готовим сокет
+    def send_responce(self, client, code, alert=None):
+        gen_response = s.MessageBuilder.create_response_message(code, alert)
+        gen_response_json = gen_response.encode_to_json()
+        client.send(gen_response_json.encode(s.ENCODING_))
 
-    transport = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    transport.bind((listen_address, listen_port))
+    def run(self) -> None:
+        while True:
+            try:
+                client, address = self._server_socket.accept()
+            except OSError:
+                pass
+            else:
+                print(f'Получен запрос на соединение от: {address}')
+                self.connections.append(client)
+            finally:
+                responce_ = []
+                write_ = []
+                try:
+                    responce_, write_, excepttions_ = s.select.select(self.connections, self.connections, [], 0)
+                except Exception:
+                    pass
+                for c in responce_:
+                    data = c.recv(s.BLOCK_LEN)
+                    parsed_message = self.parse_message(data)
+                    try:
+                        if parsed_message.action == 'presence' and (c in write_):
+                            self.send_responce(client=c, code=200, alert=f'{parsed_message.user.name} в настоящее время присутствует')
+                    except:
+                        self.connections.remove(c)
 
-    # Слушаем порт
-
-    transport.listen(MAX_CONNECTIONS)
-
-
-
-    while True:
-        client, client_address = transport.accept()
-        LOGGER.info(f'Установлено соедение с ПК {client_address}')
-        try:
-            message_from_cient = get_message(client)
-            LOGGER.debug(f'Получено сообщение {message_from_cient}')
-            response = process_client_message(message_from_cient)
-            LOGGER.info(f'Cформирован ответ клиенту {response}')
-            send_message(client, response)
-            LOGGER.debug(f'Соединение с клиентом {client_address} закрывается.')
-            client.close()
-        except json.JSONDecodeError:
-            LOGGER.error(f'Не удалось декодировать JSON строку, полученную от '
-                             f'клиента {client_address}. Соединение закрывается.')
-            client.close()
-        except IncorrectDataRecivedError:
-            LOGGER.error(f'От клиента {client_address} приняты некорректные данные. '
-                             f'Соединение закрывается.')
-            client.close()
+    def close(self):
+        self._server_socket.close()
 
 
 if __name__ == '__main__':
-    main(
-
-    )
+    args = s.parse_cli_arguments(DESC)
+    server = Server(host=args.host, port=args.port)
+    server.run()
