@@ -1,114 +1,88 @@
+import asinc_chat.services as s
+from threading import Thread
+
 import logging
-import logs.config_client_log
-import argparse
+from asinc_chat.log import client_log_config
+
+from asinc_chat.ui.py_form import Ui_MainWindow
 import sys
-import os
-from Crypto.PublicKey import RSA
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5 import QtWidgets
 
-from common.variables import *
-from common.errors import ServerError
-from common.decos import log
-from client.database import ClientDatabase
-from client.transport import ClientTransport
-from client.main_window import ClientMainWindow
-from client.start_dialog import UserNameDialog
-
-# Инициализация клиентского логера
-logger = logging.getLogger('client')
+DESC = 'Client'
+LOG = logging.getLogger('client')
 
 
-# Парсер аргументов коммандной строки
-@log
-def arg_parser():
-    '''
-    Парсер аргументов командной строки, возвращает кортеж из 4 элементов
-    адрес сервера, порт, имя пользователя, пароль.
-    Выполняет проверку на корректность номера порта.
-    '''
-    parser = argparse.ArgumentParser()
-    parser.add_argument('addr', default=DEFAULT_IP_ADDRESS, nargs='?')
-    parser.add_argument('port', default=DEFAULT_PORT, type=int, nargs='?')
-    parser.add_argument('-n', '--name', default=None, nargs='?')
-    parser.add_argument('-p', '--password', default='', nargs='?')
-    namespace = parser.parse_args(sys.argv[1:])
-    server_address = namespace.addr
-    server_port = namespace.port
-    client_name = namespace.name
-    client_passwd = namespace.password
+class Client:
+    """
+    Клиент, подключается по протоколу TCP
+    """
+    _client_socket = s.socket.socket(s.socket.AF_INET, s.socket.SOCK_STREAM)
 
-    # проверим подходящий номер порта
-    if not 1023 < server_port < 65536:
-        logger.critical(
-            f'Попытка запуска клиента с неподходящим номером порта: {server_port}. Допустимы адреса с 1024 до 65535. Клиент завершается.')
-        exit(1)
+    def __init__(self, host:str, port: int) -> None:
+        self._client_socket.connect((host, port))
+        self.login = None
 
-    return server_address, server_port, client_name, client_passwd
+    def __del__(self):
+        self._client_socket.close()
 
+    @s.Log(LOG)
+    def get_data(self):
+        self.data = None
+        while self.data is None:
+            self.data = self._client_socket.recv(s.BLOCK_LEN)
+        return self.data
 
-# Основная функция клиента
+    @s.Log(LOG)
+    def parse_response(self, response):
+        resp = response.decode(s.ENCODING_)
+        # print(resp)
+        parsed_response = s.MessageBuilder.get_object_of_json(resp)
+        print(f'Статус: {parsed_response.response}, {parsed_response.alert}')
+        return parsed_response.response, parsed_response.alert
+
+    def read_server_response(self):
+        while True:
+            response = self.get_data()
+            response, alert = self.parse_response(response)
+
+    @s.Log(LOG)
+    def send_message(self, type=None, msg=None):
+        if self.login is None:
+            self.login = input('Login:')
+            # self.login = 'Guest'
+        if type == 'presence':
+            gen_message = s.MessageBuilder.create_presence_message(self.login)
+            gen_message_json = gen_message.encode_to_json()
+            self._client_socket.send(gen_message_json.encode(s.ENCODING_))
+        if type == 'chat':
+            gen_message = s.MessageBuilder.create_message_to_chat(self.login, msg)
+            gen_message_json = gen_message.encode_to_json()
+            self._client_socket.send(gen_message_json.encode(s.ENCODING_))
+
+    @s.Log(LOG)
+    def run(self):
+        self.send_message(type='presence')
+        response = self.get_data()
+        response, alert = self.parse_response(response)
+        # запускаем поток вычитывания серверных сообщений
+        th_sender = Thread(target=self.read_server_response)
+        th_sender.daemon = True
+        th_sender.start()
+        while True:
+            msg = input('> ')
+            if msg == '/q':
+                break
+            self.send_message(type='chat', msg=msg)
+                  
+
 if __name__ == '__main__':
-    # Загружаем параметы коммандной строки
-    server_address, server_port, client_name, client_passwd = arg_parser()
-
-    # Создаём клиентокое приложение
-    client_app = QApplication(sys.argv)
-
-    # Если имя пользователя не было указано в командной строке то запросим его
-    start_dialog = UserNameDialog()
-    if not client_name or not client_passwd:
-        client_app.exec_()
-        # Если пользователь ввёл имя и нажал ОК, то сохраняем ведённое и
-        # удаляем объект, инааче выходим
-        if start_dialog.ok_pressed:
-            client_name = start_dialog.client_name.text()
-            client_passwd = start_dialog.client_passwd.text()
-        else:
-            exit(0)
-
-    # Записываем логи
-    logger.info(
-        f'Запущен клиент с парамертами: адрес сервера: {server_address} , порт: {server_port}, имя пользователя: {client_name}')
-
-    # Загружаем ключи с файла, если же файла нет, то генерируем новую пару.
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    key_file = os.path.join(dir_path, f'{client_name}.key')
-    if not os.path.exists(key_file):
-        keys = RSA.generate(2048, os.urandom)
-        with open(key_file, 'wb') as key:
-            key.write(keys.export_key())
-    else:
-        with open(key_file, 'rb') as key:
-            keys = RSA.import_key(key.read())
-
-    keys.publickey().export_key()
-    # Создаём объект базы данных
-    database = ClientDatabase(client_name)
-    # Создаём объект - транспорт и запускаем транспортный поток
-    try:
-        transport = ClientTransport(
-            server_port,
-            server_address,
-            database,
-            client_name,
-            client_passwd,
-            keys)
-    except ServerError as error:
-        message = QMessageBox()
-        message.critical(start_dialog, 'Ошибка сервера', error.text)
-        exit(1)
-    transport.setDaemon(True)
-    transport.start()
-
-    # Удалим объект диалога за ненадобностью
-    del start_dialog
-
-    # Создаём GUI
-    main_window = ClientMainWindow(database, transport, keys)
-    main_window.make_connection(transport)
-    main_window.setWindowTitle(f'Чат Программа alpha release - {client_name}')
-    client_app.exec_()
-
-    # Раз графическая оболочка закрылась, закрываем транспорт
-    transport.transport_shutdown()
-    transport.join()
+    args = s.parse_cli_arguments(DESC)
+    client_ = Client(host=args.host, port=args.port)
+    client_.run()
+    app = QtWidgets.QApplication(sys.argv)
+    window = QtWidgets.QWidget()
+    ui = Ui_MainWindow()
+    ui.setupUi(window)
+    ui.btnQuit.clicked.connect(QtWidgets.qApp.quit)
+    window.show()
+    sys.exit(app.exec_())
