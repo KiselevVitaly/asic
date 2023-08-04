@@ -1,0 +1,165 @@
+
+<!DOCTYPE html>
+
+<html lang="en-ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+    <title>My Title &#8212; asinc_chat 0.001 alfa documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/sphinx_highlight.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Welcome to asinc_chat’s documentation!" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="my-title">
+<h1>My Title<a class="headerlink" href="#my-title" title="Permalink to this heading">¶</a></h1>
+<p># ====================== Распространение приложений ===========================
+# ————————- Документирование кода —————————–
+# ———————- Документирование атрибутов —————————</p>
+<p>g = ‘module attribute (module-global variable)’
+“””Это документация переменной g.”””</p>
+<p>module_level_variable2 = 98765
+“””int: Переменная модуля.
+Можно дополнительно указывать тип переменной,
+отделяя его двоеточием от описания”””</p>
+<dl>
+<dt>class AClass:</dt><dd><p>c = ‘class attribute’
+“””Это документация атрибута AClass.c.”””</p>
+<p>def __init__(self):
+“””Документация метода <code class="docutils literal notranslate"><span class="pre">__init__</span></code>”””
+self.i = ‘instance attribute’
+“””Документация атрибута self.i.”””</p>
+<p>def f(x):
+“””Документация функции f.”””
+return x**2</p>
+</dd>
+</dl>
+<p>f.a = 1
+“””Документация атрибута фукнции f.”””</p>
+<p># —————- Дополнительные строки документации ————————-</p>
+<dl class="simple">
+<dt>def function(arg):</dt><dd><p>“””Это документации функции; будет помещена в атрибут __doc__.”””
+“””
+Это дополнительная строка документации;
+игнорируется компилятором байт-кода
+но извлекается инструментом Docutils.
+“””
+pass</p>
+</dd>
+<dt>def function_with_types_in_docstring(param1, param2):</dt><dd><p>“”” Пример функции с указанием типов в строках документации.
+Поддерживается аннотация типов согласно <a class="reference internal" href="#pep-484">PEP 484</a> .
+Если атрибут, параметр и возвращаемое значение имеют аннотацию по <a class="reference internal" href="#pep-484">PEP 484</a>,
+то из не нужно включать в строки документации.
+Args:
+param1 (int): Первый параметр.
+param2 (str): Второй параметр.
+Returns:
+bool: Возвращаемое значение. True - успешное завершение, False - ошибка.
+.. <span class="target" id="pep-484">PEP 484</span>: <a class="reference external" href="https://www.python.org/dev/peps/pep-0484/">https://www.python.org/dev/peps/pep-0484/</a>
+“””
+pass</p>
+</dd>
+<dt>def function_with_pep484_type_annotations(param1: int, param2: str) -&gt; bool:</dt><dd><p>“”” Пример функции с аннотацией типов по PEP 484.
+Args:
+param1: Первый параметр.
+param2: Второй параметр.
+Returns:
+Возвращаемое значение. True - успешное завершение, False - ошибка.
+“””
+pass</p>
+</dd>
+</dl>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">asinc_chat</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">My Title</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Welcome to asinc_chat’s documentation!</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2022, Vladislav Goryakin.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.3.0</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/example.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
